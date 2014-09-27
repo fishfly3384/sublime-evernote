@@ -212,6 +212,7 @@ class EvernoteDo():
         'cuddled-lists'      : None,
         'metadata'           : None,
         'markdown-in-html'   : None,
+        'tables'             : None,
         'fenced-code-blocks' : {'noclasses': True, 'cssclass': "", 'style': "default"}
     }
 
@@ -244,7 +245,7 @@ class EvernoteDo():
             EvernoteDo.MD_EXTRAS['inline-css'] = css
         self.md_syntax = self.settings.get("md_syntax")
         if not self.md_syntax:
-            self.md_syntax = find_syntax("Evernote")
+            self.md_syntax = find_syntax("Markdown")
 
     def message(self, msg):
         sublime.status_message(msg)

@@ -816,6 +816,9 @@ class Markdown(object):
             text = self._prepare_pyshell_blocks(text)
         if "wiki-tables" in self.extras:
             text = self._do_wiki_tables(text)
+        # switch to support GFM tables
+        if "tables" in self.extras:
+            text = self._do_tables(text)
 
         text = self._do_code_blocks(text)
 
@@ -855,6 +858,89 @@ class Markdown(object):
             """ % less_than_tab, re.M | re.X)
 
         return _pyshell_block_re.sub(self._pyshell_block_sub, text)
+
+    # added by fishfly3384, to support GFM tables
+    def _table_sub(self, match):
+        head, underline, body = match.groups()
+
+        # Determine aligns for columns.
+        cols = [cell.strip() for cell in underline.strip('| \t\n').split('|')]
+        align_from_col_idx = {}
+        for col_idx, col in enumerate(cols):
+            if col[0] == ':' and col[-1] == ':':
+                align_from_col_idx[col_idx] = ' align="center"'
+            elif col[0] == ':':
+                align_from_col_idx[col_idx] = ' align="left"'
+            elif col[-1] == ':':
+                align_from_col_idx[col_idx] = ' align="right"'
+
+        table_style = self._html_class_str_from_tag("table")
+        td_style =  self._html_class_str_from_tag("td")
+        tr_style =  self._html_class_str_from_tag("tr")
+        tr_odd_style =  self._html_class_str_from_tag("tr:odd")
+        tr_even_style =  self._html_class_str_from_tag("tr:even")
+        tr_head_style =  self._html_class_str_from_tag("tr:head")
+
+        # thead
+        hlines = ['<table%s>' % table_style, '<thead> ', '<tr%s%s>' % (tr_style, tr_head_style)]
+        cols = [cell.strip() for cell in head.strip('| \t\n').split('|')]
+        for col_idx, col in enumerate(cols):
+            hlines.append('  <th%s%s>%s</th>' % (
+                td_style,
+                align_from_col_idx.get(col_idx, ''),
+                self._run_span_gamut(col)
+            ))
+        hlines.append('</tr>')
+        hlines.append('</thead>')
+        i = 0
+        # tbody
+        hlines.append('<tbody>')
+        for line in body.strip('\n').split('\n'):
+            hlines.append('<tr%s%s>' % (tr_style, tr_even_style if i % 2 else tr_odd_style))
+            cols = [cell.strip() for cell in line.strip('| \t\n').split('|')]
+            for col_idx, col in enumerate(cols):
+                hlines.append('  <td%s%s>%s</td>' % (
+                    td_style,
+                    align_from_col_idx.get(col_idx, ''),
+                    self._run_span_gamut(col)
+                ))
+            hlines.append('</tr>')
+            i = i + 1
+        hlines.append('</tbody>')
+        hlines.append('</table>')
+
+        return '\n'.join(hlines) + '\n'
+
+    # added by fishfly3384, to support GFM tables
+    def _do_tables(self, text):
+        """Copying PHP-Markdown and GFM table syntax. Some regex borrowed from
+        https://github.com/michelf/php-markdown/blob/lib/Michelf/Markdown.php#L2538
+        """
+        less_than_tab = self.tab_width - 1
+        table_re = re.compile(r'''
+                (?:(?<=\n\n)|\A\n?)             # leading blank line
+
+                ^[ ]{0,%d}                      # allowed whitespace
+                (.*[|].*)  \n                   # $1: header row (at least one pipe)
+
+                ^[ ]{0,%d}                      # allowed whitespace
+                (                               # $2: underline row
+                    # underline row with leading bar
+                    (?:  \|\ *:?-+:?\ *  )+  \|?  \n
+                    |
+                    # or, underline row without leading bar
+                    (?:  \ *:?-+:?\ *\|  )+  (?:  \ *:?-+:?\ *  )?  \n
+                )
+
+                (                               # $3: data rows
+                    (?:
+                        ^[ ]{0,%d}(?!\ )         # ensure line begins with 0 to less_than_tab spaces
+                        .*\|.*  \n
+                    )+
+                )
+            ''' % (less_than_tab, less_than_tab, less_than_tab), re.M | re.X)
+        return table_re.sub(self._table_sub, text)
+
 
     def _wiki_table_sub(self, match):
         ttext = match.group(0).strip()
